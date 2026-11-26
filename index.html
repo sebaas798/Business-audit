@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Audit AI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0f172a;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .hero {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(59,130,246,.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59,130,246,.3);
+      padding: 6px 16px;
+      border-radius: 9999px;
+      font-size: .82em;
+      font-weight: 600;
+      letter-spacing: .5px;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: clamp(2em, 5vw, 3.2em);
+      font-weight: 800;
+      color: white;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    h1 span { color: #3b82f6; }
+    .subtitle {
+      color: #94a3b8;
+      font-size: 1.05em;
+      max-width: 500px;
+      margin: 0 auto 12px;
+      line-height: 1.6;
+    }
+    .features {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748b;
+      font-size: .85em;
+    }
+    .feature .dot { width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.4);
+    }
+    .card h2 {
+      color: white;
+      font-size: 1.2em;
+      font-weight: 700;
+      margin-bottom: 28px;
+    }
+    .form-group { margin-bottom: 20px; }
+    label {
+      display: block;
+      color: #94a3b8;
+      font-size: .82em;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 8px;
+    }
+    input, select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 13px 16px;
+      color: white;
+      font-size: .95em;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input:focus, select:focus { border-color: #3b82f6; }
+    input::placeholder { color: #475569; }
+    select option { background: #1e293b; }
+    .btn {
+      width: 100%;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 15px;
+      font-size: 1em;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background .2s, transform .1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status {
+      margin-top: 20px;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: .88em;
+      font-weight: 500;
+      display: none;
+    }
+    .status.loading { background: rgba(59,130,246,.1); color: #60a5fa; border: 1px solid rgba(59,130,246,.2); display: block; }
+    .status.error { background: rgba(239,68,68,.1); color: #f87171; border: 1px solid rgba(239,68,68,.2); display: block; }
+    .progress-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #475569;
+      font-size: .82em;
+    }
+    .step.active { color: #60a5fa; }
+    .step.done { color: #4ade80; }
+    .step-icon { font-size: 1em; width: 18px; text-align: center; }
+    .divider { border: none; border-top: 1px solid #334155; margin: 24px 0; }
+    .note { color: #475569; font-size: .78em; text-align: center; line-height: 1.5; }
+    .webhook-url {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #60a5fa;
+      font-size: .78em;
+      font-family: monospace;
+      word-break: break-all;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="badge">&#9889; Powered by IA + n8n</div>
+    <h1>Business<br><span>Audit AI</span></h1>
+    <p class="subtitle">Analizamos tu negocio con inteligencia artificial y te devolvemos una auditoría profesional completa.</p>
+    <div class="features">
+      <div class="feature"><div class="dot"></div> Auditoría de Marketing</div>
+      <div class="feature"><div class="dot"></div> Análisis SEO</div>
+      <div class="feature"><div class="dot"></div> Competencia</div>
+      <div class="feature"><div class="dot"></div> Plan de Crecimiento</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Analiza tu negocio ahora</h2>
+    <form id="auditForm" action="https://clinic-unfold-bakery.ngrok-free.dev/webhook/business-audit" method="post" target="_blank" enctype="application/x-www-form-urlencoded">
+      <div class="form-group">
+        <label>Sitio web</label>
+        <input type="url" id="url" name="url" placeholder="https://tunegocio.com" required>
+      </div>
+      <div class="form-group">
+        <label>Email (para recibir el reporte)</label>
+        <input type="email" id="email" name="email" placeholder="cliente@email.com" required>
+      </div>
+      <div class="form-group">
+        <label>Instagram (sin @)</label>
+        <input type="text" id="instagram" name="instagram" placeholder="tunegocio" required>
+      </div>
+      <div class="form-group">
+        <label>Rubro / Industria</label>
+        <select id="rubro" name="rubro">
+          <option value="">Seleccioná tu rubro...</option>
+          <option value="E-commerce / Tienda online">E-commerce / Tienda online</option>
+          <option value="Gastronomía / Restaurante">Gastronomía / Restaurante</option>
+          <option value="Servicios profesionales">Servicios profesionales</option>
+          <option value="Salud y bienestar">Salud y bienestar</option>
+          <option value="Educación / Formación">Educación / Formación</option>
+          <option value="Inmobiliaria">Inmobiliaria</option>
+          <option value="Moda y accesorios">Moda y accesorios</option>
+          <option value="Tecnología / SaaS">Tecnología / SaaS</option>
+          <option value="Turismo y hotelería">Turismo y hotelería</option>
+          <option value="Fitness y deporte">Fitness y deporte</option>
+          <option value="Consultoría">Consultoría</option>
+          <option value="Marketing y agencia">Marketing y agencia</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <button type="submit" class="btn" id="submitBtn">
+        <span id="btnText">Generar Auditoría</span>
+        <div class="spinner" id="spinner"></div>
+      </button>
+    </form>
+
+    <div class="status loading" id="statusBox">
+      <div id="statusText">Analizando tu negocio...</div>
+      <div class="progress-steps" id="progressSteps">
+        <div class="step active" id="step1"><span class="step-icon">&#128506;</span> Analizando sitio web...</div>
+        <div class="step" id="step2"><span class="step-icon">&#128200;</span> Obteniendo métricas SEO...</div>
+        <div class="step" id="step3"><span class="step-icon">&#129504;</span> IA procesando auditoría...</div>
+        <div class="step" id="step4"><span class="step-icon">&#128196;</span> Generando reporte...</div>
+      </div>
+    </div>
+
+    <hr class="divider">
+    <p class="note">
+      El análisis tarda entre 20 y 40 segundos.<br>
+      Recibirás un informe HTML con botón para descargar como PDF.
+    </p>
+  </div>
+
+  <script>
+    // ⚠️ CAMBIÁ ESTA URL POR LA DE TU WEBHOOK EN N8N
+    document.getElementById('auditForm').addEventListener('submit', function(e) {
+      const rubro = document.getElementById('rubro').value;
+      if (!rubro) { e.preventDefault(); alert('Por favor seleccioná un rubro.'); return; }
+
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('btnText').textContent = 'Analizando... (20-40 seg)';
+      document.getElementById('spinner').style.display = 'block';
+      document.getElementById('statusBox').className = 'status loading';
+      document.getElementById('statusBox').style.display = 'block';
+      document.getElementById('statusText').textContent = 'El reporte se abrirá en una nueva pestaña...';
+      document.getElementById('progressSteps').style.display = 'none';
+
+      setTimeout(function() {
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('btnText').textContent = 'Generar Auditoría';
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('statusBox').style.display = 'none';
+        document.getElementById('progressSteps').style.display = 'flex';
+      }, 45000);
+    });
+  </script>
+</body>
+</html>

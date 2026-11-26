@@ -1,0 +1,164 @@
+{
+  "name": "Business Audit AI",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "business-audit",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "n2",
+      "name": "Fetch Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "continueOnFail": true,
+      "parameters": {
+        "url": "={{ (($('Webhook').item.json.body) || $('Webhook').item.json).url }}",
+        "options": {
+          "response": { "response": { "responseFormat": "text", "fullResponse": false } },
+          "timeout": 12000
+        }
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Google PageSpeed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300],
+      "continueOnFail": true,
+      "parameters": {
+        "url": "https://www.googleapis.com/pagespeedonline/v5/runPagespeed",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "url", "value": "={{ (($('Webhook').item.json.body) || $('Webhook').item.json).url }}" },
+            { "name": "strategy", "value": "mobile" },
+            { "name": "category", "value": "performance" },
+            { "name": "category", "value": "seo" },
+            { "name": "category", "value": "accessibility" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Prepare Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300],
+      "parameters": {
+        "jsCode": "const raw = $('Webhook').item.json || {};\nconst wh = (raw.body && typeof raw.body === 'object') ? raw.body : raw;\nconst url = wh.url || 'Sin URL';\nconst instagram = wh.instagram || 'Sin Instagram';\nconst rubro = wh.rubro || 'No especificado';\nconst email = wh.email || '';\n\nconst siteRaw = $('Fetch Website').item.json;\nconst rawHtml = (siteRaw.data || siteRaw.body || '').toString();\nconst noTags = rawHtml.split('<').map(function(p){ return p.split('>').pop(); }).join(' ');\nconst cleanText = noTags.split(' ').filter(function(w){ return w.length > 0; }).join(' ').substring(0, 2000);\n\nconst ps = $input.item.json;\nlet perf = 0, acc = 0, seo = 0, fcp = 'N/D', lcp = 'N/D', cls = 'N/D';\ntry {\n  const cats = ((ps.lighthouseResult || {}).categories) || {};\n  perf = Math.round(((cats.performance || {}).score || 0) * 100);\n  acc  = Math.round(((cats.accessibility || {}).score || 0) * 100);\n  seo  = Math.round(((cats.seo || {}).score || 0) * 100);\n  const aud = (ps.lighthouseResult || {}).audits || {};\n  fcp = (aud['first-contentful-paint'] || {}).displayValue || 'N/D';\n  lcp = (aud['largest-contentful-paint'] || {}).displayValue || 'N/D';\n  cls = (aud['cumulative-layout-shift'] || {}).displayValue || 'N/D';\n} catch(e) {}\n\nconst prompt = [\n  'Analiza este negocio. Devuelve SOLO JSON valido sin markdown ni bloques de codigo.',\n  'NEGOCIO: URL=' + url + ' | Instagram=@' + instagram + ' | Rubro=' + rubro,\n  'PAGESPEED: Performance=' + perf + ' | SEO=' + seo + ' | Accesibilidad=' + acc,\n  'FCP=' + fcp + ' LCP=' + lcp + ' CLS=' + cls,\n  'CONTENIDO WEB: ' + cleanText,\n  'ESTRUCTURA REQUERIDA (completa con analisis reales en espanol):',\n  '{ score_general:0-100, resumen_ejecutivo:string, marketing:{score,presencia_digital,branding,redes_sociales,fortalezas:[3],mejoras:[3]}, seo:{score,tecnico,velocidad,contenido,problemas:[3],acciones:[5]}, competencia:{score,panorama,posicionamiento,ventajas:[3],desventajas:[2],diferenciacion}, crecimiento:{oportunidades:[5],quick_wins:[3],plan_30d:[3],plan_60d:[3],plan_90d:[3],kpis:[4]} }'\n].join('\\n');\n\nconst apiBody = JSON.stringify({\n  model: 'llama-3.3-70b-versatile',\n  messages: [\n    { role: 'system', content: 'Eres un consultor de negocios digitales experto. Responde siempre en espanol. Devuelve SOLO JSON valido. Nunca uses markdown, nunca uses bloques de codigo.' },\n    { role: 'user', content: prompt }\n  ],\n  max_tokens: 4000,\n  temperature: 0.7\n});\n\nreturn [{json: {apiBody, url, instagram, rubro, email, pagespeed: {perf, acc, seo, fcp, lcp, cls}}}];"
+      }
+    },
+    {
+      "id": "n5",
+      "name": "Groq API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer PEGAR_AQUI_TU_GROQ_API_KEY" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      }
+    },
+    {
+      "id": "n6",
+      "name": "Generate HTML Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 300],
+      "parameters": {
+        "jsCode": "const resp = $input.item.json;\nconst choice = (resp.choices || [])[0] || {};\nlet aiRaw = (choice.message || {}).content || '{}';\naiRaw = aiRaw.replace(/```json/g, '').replace(/```/g, '').trim();\nlet ai;\ntry { ai = JSON.parse(aiRaw); } catch(e) { ai = {}; }\n\nconst prep = $('Prepare Prompt').item.json;\nconst url = prep.url || '';\nconst instagram = prep.instagram || '';\nconst rubro = prep.rubro || '';\nconst email = prep.email || '';\nconst ps = prep.pagespeed || {};\nconst score = ai.score_general || 0;\nconst scoreColor = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444';\nconst scoreLabel = score >= 70 ? 'Bueno' : score >= 40 ? 'Regular' : 'Critico';\nconst date = new Date().toLocaleDateString('es-AR', {year:'numeric',month:'long',day:'numeric'});\n\nconst m = ai.marketing || {};\nconst s = ai.seo || {};\nconst c = ai.competencia || {};\nconst g = ai.crecimiento || {};\n\nfunction li(arr) {\n  return (arr||[]).map(function(i){ return '<li>' + i + '</li>'; }).join('');\n}\n\nfunction bar(n) {\n  const col = n >= 70 ? '#22c55e' : n >= 40 ? '#f59e0b' : '#ef4444';\n  return '<div style=\\'display:flex;align-items:center;gap:10px\\'><div style=\\'flex:1;background:#e5e7eb;border-radius:9999px;height:8px\\'><div style=\\'width:' + n + '%;background:' + col + ';height:8px;border-radius:9999px\\'></div></div><b style=\\'color:' + col + '\\'>' + n + '/100</b></div>';\n}\n\nconst css = '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#1e293b}@media print{.np{display:none}body{background:#fff}}.hdr{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:44px 52px;position:relative}.hdr h1{font-size:2em;font-weight:800}.hdr .sub{opacity:.75;margin-top:5px}.hdr .dt{margin-top:8px;font-size:.82em;opacity:.55}.bdg{position:absolute;right:52px;top:36px;width:110px;height:110px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(0,0,0,.4)}.bdg .n{font-size:2.4em;font-weight:900;color:#fff;line-height:1}.bdg .l{font-size:.68em;font-weight:700;color:rgba(255,255,255,.85);text-transform:uppercase}.meta{background:#fff;padding:12px 52px;display:flex;gap:28px;font-size:.86em;color:#64748b;border-bottom:1px solid #e2e8f0;flex-wrap:wrap}.wrap{max-width:940px;margin:0 auto;padding:28px 14px}.card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.07);padding:28px;margin-bottom:22px}.card h2{font-size:1.25em;font-weight:700;color:#0f172a;border-left:4px solid #3b82f6;padding-left:13px;margin-bottom:18px}.card h3{font-size:.72em;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.7px;margin:16px 0 7px}.card p{color:#475569;line-height:1.75;margin-bottom:8px}.card ul{padding-left:16px;color:#475569;line-height:1.7}.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0}.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}.m{background:#f8fafc;border-radius:8px;padding:14px;text-align:center}.m .v{font-size:1.75em;font-weight:800;color:#0f172a}.m .l{font-size:.75em;color:#64748b;margin-top:3px}.pb{border-radius:9px;padding:14px}.pg{background:#f0fdf4}.pb2{background:#eff6ff}.pp{background:#faf5ff}.pb ul,.pg ul,.pb2 ul,.pp ul{padding-left:14px}.tag{display:inline-block;background:#dbeafe;color:#1e40af;padding:4px 10px;border-radius:5px;font-size:.8em;font-weight:500;margin:3px}.btn{background:#3b82f6;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.92em}.ft{text-align:center;padding:28px 14px;color:#94a3b8;font-size:.8em;line-height:1.8}</style>';\n\nconst html = '<!DOCTYPE html>'\n  + '<html lang=\\'es\\'>'\n  + '<head><meta charset=\\'UTF-8\\'>'\n  + '<meta name=\\'viewport\\' content=\\'width=device-width,initial-scale=1\\'>'\n  + '<title>Auditoria - ' + rubro + '</title>' + css + '</head>'\n  + '<body>'\n  + '<div class=\\'hdr\\'>'\n    + '<h1>Auditoria Digital</h1>'\n    + '<div class=\\'sub\\'>' + rubro + ' &mdash; ' + url + '</div>'\n    + '<div class=\\'dt\\'>' + date + '</div>'\n    + '<div class=\\'bdg\\' style=\\'background:' + scoreColor + '\\'><span class=\\'n\\'>' + score + '</span><span class=\\'l\\'>' + scoreLabel + '</span></div>'\n  + '</div>'\n  + '<div class=\\'meta\\'>'\n    + '<span>URL: ' + url + '</span>'\n    + '<span>Instagram: @' + instagram + '</span>'\n    + '<span>Rubro: ' + rubro + '</span>'\n  + '</div>'\n  + '<div class=\\'wrap\\'>'\n  + '<div class=\\'np\\' style=\\'text-align:right;margin-bottom:14px\\'>'\n    + '<button class=\\'btn\\' onclick=\\'window.print()\\'>Descargar PDF</button>'\n  + '</div>'\n  + '<div class=\\'card\\'>'\n    + '<h2>Resumen Ejecutivo</h2>'\n    + '<p>' + (ai.resumen_ejecutivo || '') + '</p>'\n    + '<div class=\\'g4\\'>'\n      + '<div class=\\'m\\'><div class=\\'v\\' style=\\'color:' + scoreColor + '\\'>' + score + '</div><div class=\\'l\\'>General</div></div>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + (m.score||0) + '</div><div class=\\'l\\'>Marketing</div></div>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + (s.score||0) + '</div><div class=\\'l\\'>SEO</div></div>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + (c.score||0) + '</div><div class=\\'l\\'>Competencia</div></div>'\n    + '</div>'\n  + '</div>'\n  + '<div class=\\'card\\'>'\n    + '<h2>Auditoria de Marketing</h2>'\n    + '<h3>Score</h3>' + bar(m.score||0)\n    + '<h3>Presencia Digital</h3><p>' + (m.presencia_digital||'') + '</p>'\n    + '<h3>Branding</h3><p>' + (m.branding||'') + '</p>'\n    + '<h3>Redes Sociales</h3><p>' + (m.redes_sociales||'') + '</p>'\n    + '<div class=\\'g2\\'>'\n      + '<div><h3>Fortalezas</h3><ul>' + li(m.fortalezas) + '</ul></div>'\n      + '<div><h3>Mejoras</h3><ul>' + li(m.mejoras) + '</ul></div>'\n    + '</div>'\n  + '</div>'\n  + '<div class=\\'card\\'>'\n    + '<h2>Auditoria SEO</h2>'\n    + '<h3>Score</h3>' + bar(s.score||0)\n    + '<div class=\\'g3\\'>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + (ps.perf||0) + '</div><div class=\\'l\\'>Performance</div></div>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + (ps.seo||0) + '</div><div class=\\'l\\'>SEO Score</div></div>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + (ps.acc||0) + '</div><div class=\\'l\\'>Accesibilidad</div></div>'\n    + '</div>'\n    + '<div class=\\'g3\\'>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + ps.fcp + '</div><div class=\\'l\\'>FCP</div></div>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + ps.lcp + '</div><div class=\\'l\\'>LCP</div></div>'\n      + '<div class=\\'m\\'><div class=\\'v\\'>' + ps.cls + '</div><div class=\\'l\\'>CLS</div></div>'\n    + '</div>'\n    + '<h3>SEO Tecnico</h3><p>' + (s.tecnico||'') + '</p>'\n    + '<h3>Velocidad</h3><p>' + (s.velocidad||'') + '</p>'\n    + '<h3>Contenido y Keywords</h3><p>' + (s.contenido||'') + '</p>'\n    + '<div class=\\'g2\\'>'\n      + '<div><h3>Problemas</h3><ul>' + li(s.problemas) + '</ul></div>'\n      + '<div><h3>Acciones</h3><ul>' + li(s.acciones) + '</ul></div>'\n    + '</div>'\n  + '</div>'\n  + '<div class=\\'card\\'>'\n    + '<h2>Analisis de Competencia</h2>'\n    + '<h3>Posicionamiento</h3>' + bar(c.score||0)\n    + '<h3>Panorama del Mercado</h3><p>' + (c.panorama||'') + '</p>'\n    + '<h3>Posicionamiento Actual</h3><p>' + (c.posicionamiento||'') + '</p>'\n    + '<h3>Diferenciacion</h3><p>' + (c.diferenciacion||'') + '</p>'\n    + '<div class=\\'g2\\'>'\n      + '<div><h3>Ventajas</h3><ul>' + li(c.ventajas) + '</ul></div>'\n      + '<div><h3>Desventajas</h3><ul>' + li(c.desventajas) + '</ul></div>'\n    + '</div>'\n  + '</div>'\n  + '<div class=\\'card\\'>'\n    + '<h2>Oportunidades de Crecimiento</h2>'\n    + '<h3>Top 5 Oportunidades</h3><ul>' + li(g.oportunidades) + '</ul>'\n    + '<h3>Quick Wins</h3><ul>' + li(g.quick_wins) + '</ul>'\n    + '<div class=\\'g3\\' style=\\'margin-top:10px\\'>'\n      + '<div class=\\'pb pg\\'><h3 style=\\'color:#166534;margin-top:0\\'>30 dias</h3><ul>' + li(g.plan_30d) + '</ul></div>'\n      + '<div class=\\'pb pb2\\'><h3 style=\\'color:#1e40af;margin-top:0\\'>60 dias</h3><ul>' + li(g.plan_60d) + '</ul></div>'\n      + '<div class=\\'pb pp\\'><h3 style=\\'color:#6b21a8;margin-top:0\\'>90 dias</h3><ul>' + li(g.plan_90d) + '</ul></div>'\n    + '</div>'\n    + '<h3 style=\\'margin-top:18px\\'>KPIs</h3>'\n    + '<div style=\\'margin-top:6px\\'>' + (g.kpis||[]).map(function(k){ return '<span class=\\'tag\\'>' + k + '</span>'; }).join('') + '</div>'\n  + '</div>'\n  + '<div class=\\'ft\\'>Auditoria generada con Business Audit AI &bull; ' + date + '</div>'\n  + '</div></body></html>';\n\nreturn [{json: {html, email, rubro, url, instagram, scoreGeneral: score, scoreMarketing: m.score||0, scoreSeo: s.score||0, scoreCompetencia: c.score||0, date}}];"
+      }
+    },
+    {
+      "id": "n7",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1680, 300],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "text/html; charset=utf-8" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "n8",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1920, 300],
+      "continueOnFail": true,
+      "parameters": {
+        "fromEmail": "TU_EMAIL@gmail.com",
+        "toEmail": "={{ $('Generate HTML Report').item.json.email }}",
+        "subject": "=Tu Auditoria Digital - {{ $('Generate HTML Report').item.json.rubro }}",
+        "emailType": "html",
+        "html": "={{ $('Generate HTML Report').item.json.html }}"
+      }
+    },
+    {
+      "id": "n9",
+      "name": "Save to Google Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 300],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "POST",
+        "url": "https://script.google.com/macros/s/TU_APPS_SCRIPT_ID/exec",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ fecha: $('Generate HTML Report').item.json.date, email: $('Generate HTML Report').item.json.email, url: $('Generate HTML Report').item.json.url, instagram: $('Generate HTML Report').item.json.instagram, rubro: $('Generate HTML Report').item.json.rubro, scoreGeneral: $('Generate HTML Report').item.json.scoreGeneral, scoreMarketing: $('Generate HTML Report').item.json.scoreMarketing, scoreSeo: $('Generate HTML Report').item.json.scoreSeo, scoreCompetencia: $('Generate HTML Report').item.json.scoreCompetencia }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook":              { "main": [[{ "node": "Fetch Website",        "type": "main", "index": 0 }]] },
+    "Fetch Website":        { "main": [[{ "node": "Google PageSpeed",     "type": "main", "index": 0 }]] },
+    "Google PageSpeed":     { "main": [[{ "node": "Prepare Prompt",       "type": "main", "index": 0 }]] },
+    "Prepare Prompt":       { "main": [[{ "node": "Groq API",             "type": "main", "index": 0 }]] },
+    "Groq API":             { "main": [[{ "node": "Generate HTML Report", "type": "main", "index": 0 }]] },
+    "Generate HTML Report": { "main": [[{ "node": "Respond to Webhook",   "type": "main", "index": 0 }]] },
+    "Respond to Webhook":   { "main": [[{ "node": "Send Email",           "type": "main", "index": 0 }]] },
+    "Send Email":           { "main": [[{ "node": "Save to Google Sheets","type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  }
+}
